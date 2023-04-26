@@ -581,7 +581,7 @@ class VideoEditorController extends ChangeNotifier {
     );
     final String execute =
         // ignore: unnecessary_string_escapes
-        " -i \'$videoPath\' ${customInstruction ?? ""} $filter ${_getPreset(preset)} $_trimCmd -c copy -y \"$outputPath\"";
+        '-ss $_trimStart -i $videoPath -to $_trimEnd -c:v copy -c:a copy $outputPath';
 
     debugPrint('VideoEditor - run export video command : [$execute]');
 
