@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:cached_video_player/cached_video_player.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit_config.dart';
 import 'package:ffmpeg_kit_flutter_min_gpl/ffprobe_kit.dart';
@@ -9,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:video_editor/domain/entities/file_format.dart';
 import 'package:video_editor/domain/helpers.dart';
 import 'package:video_editor/domain/thumbnails.dart';
-import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:video_editor/domain/entities/crop_style.dart';
@@ -83,7 +83,7 @@ class VideoEditorController extends ChangeNotifier {
     this.coverStyle = const CoverSelectionStyle(),
     this.cropStyle = const CropGridStyle(),
     TrimSliderStyle? trimStyle,
-  })  : _video = VideoPlayerController.file(File(
+  })  : _video = CachedVideoPlayerController.file(File(
           // https://github.com/flutter/flutter/issues/40429#issuecomment-549746165
           Platform.isIOS ? Uri.encodeFull(file.path) : file.path,
         )),
@@ -109,14 +109,14 @@ class VideoEditorController extends ChangeNotifier {
 
   Duration _trimEnd = Duration.zero;
   Duration _trimStart = Duration.zero;
-  final VideoPlayerController _video;
+  final CachedVideoPlayerController _video;
 
   // Selected cover value
   final ValueNotifier<CoverData?> _selectedCover =
       ValueNotifier<CoverData?>(null);
 
   /// Get the [VideoPlayerController]
-  VideoPlayerController get video => _video;
+  CachedVideoPlayerController get video => _video;
 
   /// Get the [VideoPlayerController.value.initialized]
   bool get initialized => _video.value.isInitialized;
