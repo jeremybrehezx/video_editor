@@ -1,12 +1,9 @@
 import 'dart:io';
 import 'package:cached_video_player/cached_video_player.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/ffprobe_kit.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/return_code.dart';
-import 'package:ffmpeg_kit_flutter_min_gpl/statistics.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
+import 'package:video_compress/video_compress.dart';
 import 'package:video_editor/domain/entities/file_format.dart';
 import 'package:video_editor/domain/helpers.dart';
 import 'package:video_editor/domain/thumbnails.dart';
@@ -262,8 +259,6 @@ class VideoEditorController extends ChangeNotifier {
   Future<void> dispose() async {
     if (_video.value.isPlaying) await _video.pause();
     _video.removeListener(_videoListener);
-    final executions = await FFmpegKit.listSessions();
-    if (executions.isNotEmpty) await FFmpegKit.cancel();
     _video.dispose();
     _selectedCover.dispose();
     super.dispose();
@@ -352,10 +347,6 @@ class VideoEditorController extends ChangeNotifier {
 
     notifyListeners();
   }
-
-  /// Returns the ffmpeg command to apply the trim start and end parameters
-  /// [see ffmpeg doc](https://trac.ffmpeg.org/wiki/Seeking#Cuttingsmallsections)
-  String get _trimCmd => "-ss $_trimStart -to $_trimEnd";
 
   /// Get the [isTrimmed]
   ///
@@ -466,20 +457,6 @@ class VideoEditorController extends ChangeNotifier {
     return transpose.isNotEmpty ? transpose.join(',') : "";
   }
 
-  //--------------//
-  //VIDEO METADATA//
-  //--------------//
-
-  /// Return the metadata of the video [file] using Ffprobe
-  Future<void> getMetaData(
-      {required void Function(Map<dynamic, dynamic>? metadata)
-          onCompleted}) async {
-    await FFprobeKit.getMediaInformationAsync(file.path, (session) async {
-      final information = session.getMediaInformation();
-      onCompleted(information?.getAllProperties());
-    });
-  }
-
   //--------//
   // EXPORT //
   //--------//
@@ -527,137 +504,56 @@ class VideoEditorController extends ChangeNotifier {
         : "";
   }
 
-  /// Export the video using this edition parameters and return a `File`.
-  ///
-  /// The [onCompleted] param must be set to return the exported [File] video.
-  ///
-  /// The [onError] function provides the [Exception] and [StackTrace] that causes the exportation error.
-  ///
-  /// If the [name] is `null`, then it uses this video filename.
-  ///
-  /// If the [outDir] is `null`, then it uses `TemporaryDirectory`.
-  ///
-  /// The [format] of the video to be exported, by default [VideoExportFormat.mp4].
-  /// You can export as a GIF file by using [VideoExportFormat.gif] or with
-  /// [GifExportFormat()] which allows you to control the frame rate of the exported GIF file.
-  ///
-  /// The [scale] is `scale=width*scale:height*scale` and reduce or increase video size.
-  ///
-  /// The [customInstruction] param can be set to add custom commands to the FFmpeg eexecution
-  /// (i.e. `-an` to mute the generated video), some commands require the GPL package
-  ///
-  /// The [onProgress] is called while the video is exporting.
-  /// This argument is usually used to update the export progress percentage.
-  /// This function return [Statistics] from FFmpeg session and the [double] progress value between 0.0 and 1.0.
-  ///
-  /// The [preset] is the `compress quality` **(Only available on GPL package)**.
-  /// A slower preset will provide better compression (compression is quality per filesize).
-  /// [More info about presets](https://trac.ffmpeg.org/wiki/Encode/H.264)
-  ///
-  /// Set [isFiltersEnabled] to `false` if you do not want to apply any changes
   Future<void> exportVideo({
     required void Function(File file) onCompleted,
     void Function(Object, StackTrace)? onError,
-    String? name,
-    String? outDir,
-    VideoExportFormat format = VideoExportFormat.mp4,
-    double scale = 1.0,
-    String? customInstruction,
-    void Function(Statistics, double)? onProgress,
-    VideoExportPreset preset = VideoExportPreset.none,
-    bool isFiltersEnabled = true,
+    VideoQuality quality = VideoQuality.Res1280x720Quality,
+    void Function(double)? onProgress,
   }) async {
     final String videoPath = file.path;
     final String outputPath = await _getOutputPath(
       filePath: videoPath,
-      name: name,
-      outputDirectory: outDir,
-      format: format,
+      format: VideoExportFormat.mp4,
     );
-    final String filter = _getExportFilters(
-      videoFormat: format,
-      scale: scale,
-      isFiltersEnabled: isFiltersEnabled,
+
+    final Subscription subscription =
+        VideoCompress.compressProgress$.subscribe((progress) {
+      if (onProgress != null) {
+        onProgress(progress);
+      }
+      debugPrint('progress: $progress');
+    });
+
+    final compressedFile = await VideoCompress.compressVideo(
+      videoPath,
+      quality: quality,
+      deleteOrigin: false,
+      includeAudio: true,
     );
-    final String execute =
-        // ignore: unnecessary_string_escapes
-        '-ss $_trimStart -i $videoPath -to $_trimEnd -c:v copy -c:a copy $outputPath';
 
-    debugPrint('VideoEditor - run export video command : [$execute]');
+    subscription.unsubscribe();
 
-    // PROGRESS CALLBACKS
-    FFmpegKit.executeAsync(
-      execute,
-      (session) async {
-        final state =
-            FFmpegKitConfig.sessionStateToString(await session.getState());
-        final code = await session.getReturnCode();
+    if (compressedFile != null) {
+      final File compressedFileP = File(compressedFile.path!);
 
-        if (ReturnCode.isSuccess(code)) {
-          onCompleted(File(outputPath));
-        } else {
-          if (onError != null) {
-            onError(
-              Exception(
-                  'FFmpeg process exited with state $state and return code $code.\n${await session.getOutput()}'),
-              StackTrace.current,
-            );
-          }
-          return;
+      if (await compressedFileP.exists()) {
+        final Directory outputDir = Directory(path.dirname(outputPath));
+        if (!await outputDir.exists()) {
+          await outputDir.create(recursive: true);
         }
-      },
-      null,
-      onProgress != null
-          ? (stats) {
-              // Progress value of encoded video
-              double progressValue =
-                  stats.getTime() / trimmedDuration.inMilliseconds;
-              onProgress(stats, progressValue.clamp(0.0, 1.0));
-            }
-          : null,
-    );
-  }
 
-  /// Convert [VideoExportPreset] to ffmpeg preset as a [String], [More info about presets](https://trac.ffmpeg.org/wiki/Encode/H.264)
-  ///
-  /// Return [String] in `-preset xxx` format
-  String _getPreset(VideoExportPreset preset) {
-    String? newPreset = "";
-
-    switch (preset) {
-      case VideoExportPreset.ultrafast:
-        newPreset = "ultrafast";
-        break;
-      case VideoExportPreset.superfast:
-        newPreset = "superfast";
-        break;
-      case VideoExportPreset.veryfast:
-        newPreset = "veryfast";
-        break;
-      case VideoExportPreset.faster:
-        newPreset = "faster";
-        break;
-      case VideoExportPreset.fast:
-        newPreset = "fast";
-        break;
-      case VideoExportPreset.medium:
-        newPreset = "medium";
-        break;
-      case VideoExportPreset.slow:
-        newPreset = "slow";
-        break;
-      case VideoExportPreset.slower:
-        newPreset = "slower";
-        break;
-      case VideoExportPreset.veryslow:
-        newPreset = "veryslow";
-        break;
-      case VideoExportPreset.none:
-        newPreset = "";
-        break;
+        await compressedFileP.copy(outputPath);
+        onCompleted(File(outputPath));
+      } else {
+        if (onError != null) {
+          onError(Exception('Failed to compress video'), StackTrace.current);
+        }
+      }
+    } else {
+      if (onError != null) {
+        onError(Exception('Failed to compress video'), StackTrace.current);
+      }
     }
-
-    return newPreset.isEmpty ? "" : "-preset $newPreset";
   }
 
   /// Generate this selected cover image as a JPEG [File]
@@ -704,10 +600,9 @@ class VideoEditorController extends ChangeNotifier {
     CoverExportFormat format = CoverExportFormat.jpg,
     double scale = 1.0,
     int quality = 100,
-    void Function(Statistics)? onProgress,
+    void Function(double)? onProgress,
     bool isFiltersEnabled = true,
   }) async {
-    // file generated from the thumbnail library or video source
     final String? coverPath = await _generateCoverFile(quality: quality);
     if (coverPath == null) {
       if (onError != null) {
@@ -718,42 +613,32 @@ class VideoEditorController extends ChangeNotifier {
       }
       return;
     }
+
     final String outputPath = await _getOutputPath(
       filePath: coverPath,
       name: name,
       outputDirectory: outDir,
       format: format,
     );
-    final String filter =
-        _getExportFilters(scale: scale, isFiltersEnabled: isFiltersEnabled);
-    // ignore: unnecessary_string_escapes
-    final String execute = "-i \'$coverPath\' $filter -y $outputPath";
 
-    debugPrint('VideoEditor - run export cover command : [$execute]');
-
-    // PROGRESS CALLBACKS
-    FFmpegKit.executeAsync(
-      execute,
-      (session) async {
-        final state =
-            FFmpegKitConfig.sessionStateToString(await session.getState());
-        final code = await session.getReturnCode();
-
-        if (ReturnCode.isSuccess(code)) {
-          onCompleted(File(outputPath));
-        } else {
-          if (onError != null) {
-            onError(
-              Exception(
-                  'FFmpeg process exited with state $state and return code $code.\n${await session.getOutput()}'),
-              StackTrace.current,
-            );
-          }
-          return;
-        }
-      },
-      null,
-      onProgress,
+    final Uint8List? thumbnailBytes = await VideoThumbnail.thumbnailData(
+      video: coverPath,
+      imageFormat:
+          format == CoverExportFormat.jpg ? ImageFormat.JPEG : ImageFormat.PNG,
+      quality: quality,
+      maxWidth: (scale * 100).toInt(),
+      maxHeight: (scale * 100).toInt(),
     );
+
+    if (thumbnailBytes != null) {
+      final File thumbnailFile = File(outputPath);
+      await thumbnailFile.writeAsBytes(thumbnailBytes);
+      onCompleted(thumbnailFile);
+    } else {
+      if (onError != null) {
+        onError(
+            Exception('Failed to extract cover thumbnail'), StackTrace.current);
+      }
+    }
   }
 }

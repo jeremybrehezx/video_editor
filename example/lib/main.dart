@@ -122,12 +122,8 @@ class _VideoEditorState extends State<VideoEditor> {
   void _exportVideo() async {
     _exportingProgress.value = 0;
     _isExporting.value = true;
-    // NOTE: To use `-crf 1` and [VideoExportPreset] you need `ffmpeg_kit_flutter_min_gpl` package (with `ffmpeg_kit` only it won't work)
     await _controller.exportVideo(
-      // format: VideoExportFormat.gif,
-      // preset: VideoExportPreset.medium,
-      // customInstruction: "-crf 17",
-      onProgress: (stats, value) => _exportingProgress.value = value,
+      onProgress: (value) => _exportingProgress.value = value,
       onError: (e, s) => _showErrorSnackBar("Error on export video :("),
       onCompleted: (file) {
         _isExporting.value = false;
@@ -217,12 +213,12 @@ class _VideoEditorState extends State<VideoEditor> {
                                   margin: const EdgeInsets.only(top: 10),
                                   child: Column(
                                     children: [
-                                      TabBar(
+                                      const TabBar(
                                         tabs: [
                                           Row(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
-                                              children: const [
+                                              children: [
                                                 Padding(
                                                     padding: EdgeInsets.all(5),
                                                     child: Icon(
@@ -232,7 +228,7 @@ class _VideoEditorState extends State<VideoEditor> {
                                           Row(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
-                                            children: const [
+                                            children: [
                                               Padding(
                                                   padding: EdgeInsets.all(5),
                                                   child:

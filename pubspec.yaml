@@ -15,17 +15,17 @@ dependencies:
     sdk: flutter
 
   cached_video_player: ^2.0.4
-  ffmpeg_kit_flutter_min_gpl: ^5.1.0
-  path: ^1.8.0 # update to `1.8.1` causes #79
-  path_provider: ^2.0.12
+  path: ^1.8.3 # update to `1.8.1` causes #79
+  path_provider: ^2.0.15
   transparent_image: ^2.0.1 # show fade-in placeholder in thumbnails generation
+  video_compress: ^3.1.2
   video_thumbnail: ^0.5.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^2.0.1
+  flutter_lints: ^2.0.2
 
 screenshots:
   - description: 'Video editor demo'
