@@ -496,6 +496,9 @@ class VideoEditorController extends ChangeNotifier {
       debugPrint('progress: $progress');
     });
 
+    debugPrint('Starttime: ${startTrim.inMilliseconds}');
+    debugPrint('Duration: ${(endTrim-startTrim).inMilliseconds}');
+
     final compressedFile = await VideoCompress.compressVideo(
       videoPath,
       quality: quality,
