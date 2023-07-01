@@ -475,34 +475,6 @@ class VideoEditorController extends ChangeNotifier {
     return "$tempPath/${name}_$epoch.${format.extension}";
   }
 
-  /// Returns the `-filter:v` command to use in ffmpeg execution
-  String _getExportFilters({
-    VideoExportFormat? videoFormat,
-    double scale = 1.0,
-    bool isFiltersEnabled = true,
-  }) {
-    if (!isFiltersEnabled) return "";
-
-    // CALCULATE FILTERS
-    final bool isGif =
-        videoFormat?.extension == VideoExportFormat.gif.extension;
-    final String scaleInstruction =
-        scale == 1.0 ? "" : "scale=iw*$scale:ih*$scale";
-
-    // VALIDATE FILTERS
-    final List<String> filters = [
-      _getCrop(),
-      scaleInstruction,
-      _getRotation(),
-      isGif
-          ? "fps=${videoFormat is GifExportFormat ? videoFormat.fps : VideoExportFormat.gif.fps}"
-          : "",
-    ];
-    filters.removeWhere((item) => item.isEmpty);
-    return filters.isNotEmpty
-        ? "-vf '${filters.join(",")}'${isGif ? " -loop 0" : ""}"
-        : "";
-  }
 
   Future<void> exportVideo({
     required void Function(File file) onCompleted,
@@ -529,8 +501,8 @@ class VideoEditorController extends ChangeNotifier {
       quality: quality,
       deleteOrigin: false,
       includeAudio: true,
-      startTime: startTrim.inSeconds,
-      duration: (endTrim-startTrim).inSeconds,
+      startTime: startTrim.inMilliseconds,
+      duration: (endTrim-startTrim).inMilliseconds,
     );
 
     subscription.unsubscribe();
