@@ -21,7 +21,7 @@ dependencies:
   video_compress:
     git:
       url: https://github.com/jeremybrehezx/VideoCompress.git
-      ref: df5fcc4
+      ref: 9034f38
   video_thumbnail: ^0.5.3
 
 dev_dependencies:
