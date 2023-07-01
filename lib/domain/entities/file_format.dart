@@ -43,6 +43,7 @@ class CoverExportFormat extends FileFormat {
   const CoverExportFormat(super.extension);
 
   static const jpg = CoverExportFormat('jpg');
+  static const jpeg = CoverExportFormat('jpeg');
   static const png = CoverExportFormat('png');
   static const webp = CoverExportFormat('webp');
 }

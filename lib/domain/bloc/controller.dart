@@ -597,11 +597,8 @@ class VideoEditorController extends ChangeNotifier {
     void Function(Object, StackTrace)? onError,
     String? name,
     String? outDir,
-    CoverExportFormat format = CoverExportFormat.jpg,
-    double scale = 1.0,
     int quality = 100,
     void Function(double)? onProgress,
-    bool isFiltersEnabled = true,
   }) async {
     final String? coverPath = await _generateCoverFile(quality: quality);
     if (coverPath == null) {
@@ -618,16 +615,15 @@ class VideoEditorController extends ChangeNotifier {
       filePath: coverPath,
       name: name,
       outputDirectory: outDir,
-      format: format,
+      format: CoverExportFormat.jpeg,
     );
 
     final Uint8List? thumbnailBytes = await VideoThumbnail.thumbnailData(
       video: coverPath,
-      imageFormat:
-          format == CoverExportFormat.jpg ? ImageFormat.JPEG : ImageFormat.PNG,
+      imageFormat: ImageFormat.JPEG,
       quality: quality,
-      maxWidth: (scale * 100).toInt(),
-      maxHeight: (scale * 100).toInt(),
+      maxWidth: 1080,
+      maxHeight: 1920,
     );
 
     if (thumbnailBytes != null) {
