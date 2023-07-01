@@ -529,8 +529,8 @@ class VideoEditorController extends ChangeNotifier {
       quality: quality,
       deleteOrigin: false,
       includeAudio: true,
-      startTime: minDuration.inSeconds,
-      duration: maxDuration.inSeconds,
+      startTime: startTrim.inSeconds,
+      duration: (endTrim-startTrim).inSeconds,
     );
 
     subscription.unsubscribe();
