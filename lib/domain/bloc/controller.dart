@@ -1,19 +1,13 @@
 import 'dart:io';
 import 'package:cached_video_player/cached_video_player.dart';
-import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
-import 'package:video_compress/video_compress.dart';
-import 'package:video_editor/domain/entities/file_format.dart';
 import 'package:video_editor/domain/helpers.dart';
 import 'package:video_editor/domain/thumbnails.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'package:video_editor/domain/entities/crop_style.dart';
 import 'package:video_editor/domain/entities/trim_style.dart';
 import 'package:video_editor/domain/entities/cover_style.dart';
 import 'package:video_editor/domain/entities/cover_data.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
 
 class VideoMinDurationError extends Error {
   final Duration minDuration;
@@ -275,21 +269,6 @@ class VideoEditorController extends ChangeNotifier {
   //VIDEO CROP//
   //----------//
 
-  /// Convert the [minCrop] and [maxCrop] param in to a [String]
-  /// used to provide crop values to Ffmpeg ([see more](https://ffmpeg.org/ffmpeg-filters.html#crop))
-  ///
-  /// The result is in the format `crop=w:h:x:y`
-  String _getCrop() {
-    if (minCrop <= _min && maxCrop >= _max) return "";
-
-    final enddx = videoWidth * maxCrop.dx;
-    final enddy = videoHeight * maxCrop.dy;
-    final startdx = videoWidth * minCrop.dx;
-    final startdy = videoHeight * minCrop.dy;
-
-    return "crop=${enddx - startdx}:${enddy - startdy}:$startdx:$startdy";
-  }
-
   /// Update the [minCrop] and [maxCrop] with [cacheMinCrop] and [cacheMaxCrop]
   void applyCacheCrop() => updateCrop(cacheMinCrop, cacheMaxCrop);
 
@@ -441,177 +420,4 @@ class VideoEditorController extends ChangeNotifier {
   }
 
   bool get isRotated => rotation == 90 || rotation == 270;
-
-  /// Convert the [rotation] value into a [String]
-  /// used to provide crop values to Ffmpeg ([see more](https://ffmpeg.org/ffmpeg-filters.html#transpose-1))
-  ///
-  /// The result is in the format `transpose=2` (repeated for every 90 degrees rotations)
-  String _getRotation() {
-    final count = rotation / 90;
-    if (count <= 0 || count >= 4) return "";
-
-    List<String> transpose = [];
-    for (int i = 0; i < rotation / 90; i++) {
-      transpose.add("transpose=2");
-    }
-    return transpose.isNotEmpty ? transpose.join(',') : "";
-  }
-
-  //--------//
-  // EXPORT //
-  //--------//
-
-  /// Returns the output path of the exported file
-  Future<String> _getOutputPath({
-    required String filePath,
-    String? name,
-    String? outputDirectory,
-    required FileFormat format,
-  }) async {
-    final String tempPath =
-        outputDirectory ?? (await getTemporaryDirectory()).path;
-    name ??= path.basenameWithoutExtension(filePath);
-    final int epoch = DateTime.now().millisecondsSinceEpoch;
-    return "$tempPath/${name}_$epoch.${format.extension}";
-  }
-
-
-  Future<void> exportVideo({
-    required void Function(File file) onCompleted,
-    void Function(Object, StackTrace)? onError,
-    VideoQuality quality = VideoQuality.Res1280x720Quality,
-    void Function(double)? onProgress,
-  }) async {
-    final String videoPath = file.path;
-    final String outputPath = await _getOutputPath(
-      filePath: videoPath,
-      format: VideoExportFormat.mp4,
-    );
-
-    final Subscription subscription =
-        VideoCompress.compressProgress$.subscribe((progress) {
-      if (onProgress != null) {
-        onProgress(progress);
-      }
-      debugPrint('progress: $progress');
-    });
-
-    debugPrint('Starttime: ${startTrim.inMilliseconds}');
-    debugPrint('Duration: ${(endTrim-startTrim).inMilliseconds}');
-
-    final compressedFile = await VideoCompress.compressVideo(
-      videoPath,
-      quality: quality,
-      deleteOrigin: false,
-      includeAudio: true,
-      startTime: startTrim.inMilliseconds,
-      duration: (endTrim-startTrim).inMilliseconds,
-    );
-
-    subscription.unsubscribe();
-
-    if (compressedFile != null) {
-      final File compressedFileP = File(compressedFile.path!);
-
-      if (await compressedFileP.exists()) {
-        final Directory outputDir = Directory(path.dirname(outputPath));
-        if (!await outputDir.exists()) {
-          await outputDir.create(recursive: true);
-        }
-
-        await compressedFileP.copy(outputPath);
-        onCompleted(File(outputPath));
-      } else {
-        if (onError != null) {
-          onError(Exception('Failed to compress video'), StackTrace.current);
-        }
-      }
-    } else {
-      if (onError != null) {
-        onError(Exception('Failed to compress video'), StackTrace.current);
-      }
-    }
-  }
-
-  /// Generate this selected cover image as a JPEG [File]
-  ///
-  /// If this [selectedCoverVal] is `null`, then it return the first frame of this video.
-  ///
-  /// The [quality] param specifies the quality of the generated cover, from 0 to 100 (([more info](https://pub.dev/packages/video_thumbnail)))
-  Future<String?> _generateCoverFile({int quality = 100}) async {
-    return await VideoThumbnail.thumbnailFile(
-      imageFormat: ImageFormat.JPEG,
-      thumbnailPath: (await getTemporaryDirectory()).path,
-      video: file.path,
-      timeMs: selectedCoverVal?.timeMs ?? startTrim.inMilliseconds,
-      quality: quality,
-    );
-  }
-
-  /// Export this selected cover, or by default the first one, return an image [File].
-  ///
-  /// The [onCompleted] param must be set to return the exported [File] cover
-  ///
-  /// The [onError] function provides the [Exception] and [StackTrace] that causes the exportation error.
-  ///
-  /// If the [name] is `null`, then it uses this video filename.
-  ///
-  /// If the [outDir] is `null`, then it uses `TemporaryDirectory`.
-  ///
-  /// The [format] of the image to be exported, by default [CoverExportFormat.jpg].
-  ///
-  /// The [scale] is `scale=width*scale:height*scale` and reduce or increase cover size.
-  ///
-  /// The [quality] of the exported image (from 0 to 100 ([more info](https://pub.dev/packages/video_thumbnail)))
-  ///
-  /// The [onProgress] is called while the video is exporting.
-  /// This argument is usually used to update the export progress percentage.
-  /// This function return [Statistics] from FFmpeg session.
-  ///
-  /// Set [isFiltersEnabled] to `false` if you do not want to apply any changes
-  Future<void> extractCover({
-    required void Function(File file) onCompleted,
-    void Function(Object, StackTrace)? onError,
-    String? name,
-    String? outDir,
-    int quality = 100,
-    void Function(double)? onProgress,
-  }) async {
-    final String? coverPath = await _generateCoverFile(quality: quality);
-    if (coverPath == null) {
-      if (onError != null) {
-        onError(
-          Exception('VideoThumbnail library error while exporting the cover'),
-          StackTrace.current,
-        );
-      }
-      return;
-    }
-
-    final String outputPath = await _getOutputPath(
-      filePath: coverPath,
-      name: name,
-      outputDirectory: outDir,
-      format: CoverExportFormat.jpeg,
-    );
-
-    final Uint8List? thumbnailBytes = await VideoThumbnail.thumbnailData(
-      video: coverPath,
-      imageFormat: ImageFormat.JPEG,
-      quality: quality,
-      maxWidth: 1080,
-      maxHeight: 1920,
-    );
-
-    if (thumbnailBytes != null) {
-      final File thumbnailFile = File(outputPath);
-      await thumbnailFile.writeAsBytes(thumbnailBytes);
-      onCompleted(thumbnailFile);
-    } else {
-      if (onError != null) {
-        onError(
-            Exception('Failed to extract cover thumbnail'), StackTrace.current);
-      }
-    }
-  }
 }
