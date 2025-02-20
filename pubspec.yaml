@@ -1,5 +1,5 @@
 name: video_editor
-version: 3.0.0
+version: 3.0.1
 description: |
  A flutter package for editing video with fully customizable UI.
  Supports crop, trim, rotation and cover selection.
@@ -14,17 +14,17 @@ dependencies:
   flutter:
     sdk: flutter
 
-  path: ^1.8.0 # update to `1.8.1` causes #79
-  path_provider: ^2.0.12
+  path: ^1.9.1 # update to `1.8.1` causes #79
+  path_provider: ^2.1.5
   transparent_image: ^2.0.1 # show fade-in placeholder in thumbnails generation
-  video_player: ^2.6.1
+  video_player: ^2.9.2
   video_thumbnail: ^0.5.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^2.0.1
+  flutter_lints: ^5.0.0
 
 screenshots:
   - description: 'Video editor demo'

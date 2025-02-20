@@ -303,7 +303,9 @@ class _CropGridViewerState extends State<CropGridViewer> with CropPreviewMixin {
     // don't apply changes if out of bounds
     if (newRect.width < minRectSize ||
         newRect.height < minRectSize ||
-        !isRectContained(layout, newRect)) return;
+        !isRectContained(layout, newRect)) {
+      return;
+    }
 
     rect.value = newRect;
   }
